@@ -1,0 +1,17 @@
+# Environment and Sensitive Files
+.env
+*.log
+analytics.json
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Build and IDE
+dist/
+build/
+.vscode/
+.idea/
+.DS_Store
+*.tmp
+*.temp
