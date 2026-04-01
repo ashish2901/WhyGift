@@ -254,8 +254,10 @@ app.post('/chat', async (req, res) => {
         context.confidence = readiness;
     }
 
-    // Dynamic Decision Engine Pass - Trigger at 75% or when AI explicitly flags it
-    if (generateDirections || readiness >= 75) {
+    // Dynamic Decision Engine Pass - Only run if explicitly flagged or if it's the first time reaching 75%
+    const shouldGenerate = generateDirections || (readiness >= 75 && context.directions.length === 0);
+    
+    if (shouldGenerate) {
         if (generateDirections) context.stage = 'hint';
         try {
             const rJS = await safeGroqCall([
