@@ -18,6 +18,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Main entry route
+app.get('/', (req, res) => res.send('WhyGift AI API is running!'));
+
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const sessions = {};
 
