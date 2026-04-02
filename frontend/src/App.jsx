@@ -279,48 +279,21 @@ function App() {
               </div>
             </div>
 
-            {/* THE 8 STEPS TRACKER */}
+            {/* WHO & WHY SUMMARIES */}
             <div className="compass-section">
               <div className="section-title"><UserCircle2 size={16} color="#6b7280" /> THE RECIPIENT</div>
-              <div className="summary-list">
-                <div className={`step-item ${context.relation ? 'filled' : ''}`}>
-                  <b>Relationship:</b> {context.relation || '...'}
-                </div>
-                <div className={`step-item ${context.personality && context.personality.length > 0 ? 'filled' : ''}`}>
-                  <b>Personality:</b> {context.personality?.join(', ') || '...'}
-                </div>
-                <div className={`step-item ${context.interests && context.interests.length > 0 ? 'filled' : ''}`}>
-                  <b>Interests:</b> {context.interests?.join(', ') || '...'}
-                </div>
+              <div className="summary-text">
+                {context.recipient_summary ? context.recipient_summary : (context.relation ? `Gifting your ${context.relation}...` : "Waiting for details...")}
               </div>
             </div>
 
             <div className="compass-section">
-              <div className="section-title"><Heart size={16} color="#ef4444" fill="#fca5a5" /> THE CONTEXT</div>
-              <div className="summary-list">
-                <div className={`step-item ${context.occasion ? 'filled' : ''}`}>
-                  <b>Occasion:</b> {context.occasion || '...'}
-                </div>
-                <div className={`step-item ${context.emotional_intent ? 'filled' : ''}`}>
-                  <b>Emotional Intent:</b> {context.emotional_intent || '...'}
-                </div>
-                <div className={`step-item ${context.gift_purpose ? 'filled' : ''}`}>
-                  <b>Gift Purpose:</b> {context.gift_purpose || '...'}
-                </div>
+              <div className="section-title"><Heart size={16} color="#ef4444" fill="#fca5a5" /> THE INTENT</div>
+              <div className="summary-text">
+                {context.intent_summary ? context.intent_summary : (context.occasion ? `For their ${context.occasion}...` : "What should this gift convey?")}
               </div>
             </div>
 
-            <div className="compass-section">
-              <div className="section-title"><Layers size={16} color="#eebc3f" /> LOGISTICS</div>
-              <div className="summary-list">
-                <div className={`step-item ${context.gifting_preference ? 'filled' : ''}`}>
-                  <b>Preference:</b> {context.gifting_preference || '...'}
-                </div>
-                <div className={`step-item ${context.budget ? 'filled' : ''}`}>
-                  <b>Budget:</b> {context.budget || '...'}
-                </div>
-              </div>
-            </div>
 
             {/* DIRECTIONS */}
             <div className="compass-section directions-section">

@@ -49,11 +49,15 @@ const INITIAL_CONTEXT = {
 function deepMerge(target, source) {
   if (!source) return target;
   for (const key in source) {
-    if (source[key] instanceof Object && !Array.isArray(source[key])) {
+    const val = source[key];
+    // Rule: Never overwrite existing data with empty strings or nulls
+    if (val === "" || val === null || val === undefined) continue;
+
+    if (val instanceof Object && !Array.isArray(val)) {
       if (!target[key]) target[key] = {};
-      deepMerge(target[key], source[key]);
+      deepMerge(target[key], val);
     } else {
-      target[key] = source[key];
+      target[key] = val;
     }
   }
   return target;
@@ -164,7 +168,12 @@ JSON FORMAT:
 {
   "text": "acknowledgment + next missing question",
   "suggested_options": ["Option 1", "Option 2", "..."],
-  "contextUpdate": { "relation": "...", "occasion": "...", "emotional_intent": "..." },
+  "contextUpdate": { 
+    "relation": "...", 
+    "occasion": "...",
+    "recipient_summary": "Short summary of who they are (e.g. 'Your best friend')",
+    "intent_summary": "Short summary of the goal (e.g. 'A thoughtful birthday surprise')"
+  },
   "readyForDirections": false
 }
 `;
