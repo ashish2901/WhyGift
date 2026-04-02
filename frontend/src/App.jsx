@@ -265,13 +265,13 @@ function App() {
           <div className="state-panel">
             <div className="compass-header">
               <h2><Compass size={22} color="var(--primary)" /> Gift Compass</h2>
-              <p>Clarifying your decision...</p>
+              <p>Step-by-step discovery...</p>
             </div>
 
             {/* PROGRESS */}
             <div className="progress-section">
               <div className="progress-header" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                <span className="target-icon">🎯 Confidence Level</span>
+                <span className="target-icon">🎯 Progress</span>
                 <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--primary)' }}>{context.confidence}%</span>
               </div>
               <div className="progress-bar-bg">
@@ -279,30 +279,52 @@ function App() {
               </div>
             </div>
 
-            {/* WHO & WHY SUMMARIES */}
+            {/* THE 8 STEPS TRACKER */}
             <div className="compass-section">
               <div className="section-title"><UserCircle2 size={16} color="#6b7280" /> THE RECIPIENT</div>
-              <div className="summary-text">
-                {context.recipient_summary ? context.recipient_summary : (context.relation ? `Gifting your ${context.relation}...` : "Waiting for details...")}
+              <div className="summary-list">
+                <div className={`step-item ${context.relation ? 'filled' : ''}`}>
+                  <b>Relationship:</b> {context.relation || '...'}
+                </div>
+                <div className={`step-item ${context.personality && context.personality.length > 0 ? 'filled' : ''}`}>
+                  <b>Personality:</b> {context.personality?.join(', ') || '...'}
+                </div>
+                <div className={`step-item ${context.interests && context.interests.length > 0 ? 'filled' : ''}`}>
+                  <b>Interests:</b> {context.interests?.join(', ') || '...'}
+                </div>
               </div>
             </div>
 
             <div className="compass-section">
-              <div className="section-title"><Heart size={16} color="#ef4444" fill="#fca5a5" /> THE INTENT</div>
-              <div className="summary-text">
-                {context.intent_summary ? context.intent_summary : (context.occasion ? `For their ${context.occasion}...` : "What should this gift convey?")}
+              <div className="section-title"><Heart size={16} color="#ef4444" fill="#fca5a5" /> THE CONTEXT</div>
+              <div className="summary-list">
+                <div className={`step-item ${context.occasion ? 'filled' : ''}`}>
+                  <b>Occasion:</b> {context.occasion || '...'}
+                </div>
+                <div className={`step-item ${context.emotional_intent ? 'filled' : ''}`}>
+                  <b>Emotional Intent:</b> {context.emotional_intent || '...'}
+                </div>
+                <div className={`step-item ${context.gift_purpose ? 'filled' : ''}`}>
+                  <b>Gift Purpose:</b> {context.gift_purpose || '...'}
+                </div>
+              </div>
+            </div>
+
+            <div className="compass-section">
+              <div className="section-title"><Layers size={16} color="#eebc3f" /> LOGISTICS</div>
+              <div className="summary-list">
+                <div className={`step-item ${context.gifting_preference ? 'filled' : ''}`}>
+                  <b>Preference:</b> {context.gifting_preference || '...'}
+                </div>
+                <div className={`step-item ${context.budget ? 'filled' : ''}`}>
+                  <b>Budget:</b> {context.budget || '...'}
+                </div>
               </div>
             </div>
 
             {/* DIRECTIONS */}
             <div className="compass-section directions-section">
-              <div className="section-title"><Layers size={16} color="#eebc3f" /> DIRECTIONS</div>
-
-              {context.confidence_boost && (
-                <div className="confidence-boost">
-                  <Sparkles size={14} color="#d97706" /> {context.confidence_boost}
-                </div>
-              )}
+              <div className="section-title"><Sparkles size={16} color="#eebc3f" /> GIFT DIRECTIONS</div>
 
               {context.directions && context.directions.length > 0 ? (
                 <div className="direction-list">
@@ -315,8 +337,7 @@ function App() {
                 </div>
               ) : (
                 <div className="empty-state">
-                  <Sparkles size={24} color="#d1d5db" />
-                  <p>Meaningful directions will appear here once we understand your goals.</p>
+                  <p className="small-text">Complete the 8 steps to see meaningful directions.</p>
                 </div>
               )}
             </div>
@@ -361,7 +382,6 @@ function App() {
                 )}
               </div>
             )}
-
           </div>
         </div>
       </div>
