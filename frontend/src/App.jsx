@@ -99,7 +99,11 @@ function App() {
       const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToSend, session_id: sessionId }),
+        body: JSON.stringify({ 
+          message: textToSend, 
+          session_id: sessionId,
+          contextOverride: context 
+        }),
       });
       if (!response.ok) throw new Error("API error");
       const data = await response.json();
