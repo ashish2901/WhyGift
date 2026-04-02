@@ -2,55 +2,58 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { Groq } = require('groq-sdk');
+const fs = require('fs');
+const path = require('path');
 
 dotenv.config();
-
-// Vercel Serverless Adaptation: Use console.log for cloud logs
-function log(msg) {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${msg}`);
-}
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Main entry route
-app.get('/', (req, res) => res.send('WhyGift AI API is running on Vercel!'));
-app.get('/api/health', (req, res) => res.send({ status: 'healthy', timestamp: new Date().toISOString() }));
-
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
-// NOTE: sessions are in-memory and will reset on serverless cold starts.
 const sessions = {};
 
+const LOG_FILE = path.join(__dirname, 'debug.log');
+function log(msg) {
+    const timestamp = new Date().toISOString();
+    try {
+        // Vercel file system is read-only, but logging for compatibility
+        fs.appendFileSync(LOG_FILE, `[${timestamp}] ${msg}\n`);
+    } catch (e) { }
+    console.log(`[${timestamp}] ${msg}`);
+}
+
 const INITIAL_CONTEXT = {
+  stage: 'entry',
   relation: '',
   occasion: '',
-  emotional_intent: '',
-  gift_purpose: '',
+  desired_feeling: '',
+  conveyed_emotion: '',
+  gift_intent: '',
   interests: [],
   personality: [],
-  gifting_preference: '',
-  budget: '',
+  gifting_frequency: '',
+  budget_style: '',
+  preference_style: '',
+  uncertainty: '',
+  notes: '',
   recipient_summary: '',
   intent_summary: '',
   directions: [],
-  confidence: 0
+  confidence: 0,
+  confidence_boost: '',
+  ai_confidence: null
 };
 
 function deepMerge(target, source) {
   if (!source) return target;
   for (const key in source) {
-    const val = source[key];
-    // Rule: Never overwrite existing data with empty strings or nulls
-    if (val === "" || val === null || val === undefined) continue;
-
-    if (val instanceof Object && !Array.isArray(val)) {
+    if (source[key] instanceof Object && !Array.isArray(source[key])) {
       if (!target[key]) target[key] = {};
-      deepMerge(target[key], val);
+      deepMerge(target[key], source[key]);
     } else {
-      target[key] = val;
+      target[key] = source[key];
     }
   }
   return target;
@@ -58,160 +61,105 @@ function deepMerge(target, source) {
 
 function calculateConfidence(context) {
   let s = 0;
-  if (context.relation) s += 15;
-  if (context.occasion) s += 15;
-  if (context.emotional_intent) s += 15;
-  if (context.gift_purpose) s += 15;
-  if (context.interests?.length > 0) s += 10;
-  if (context.personality?.length > 0) s += 10;
-  if (context.gifting_preference) s += 10;
-  if (context.budget) s += 10;
-  return Math.min(s, 100);
+  if (context.relation) s += 20;
+  if (context.occasion) s += 20;
+  if (context.gift_intent) s += 20;
+  if (context.interests && context.interests.length > 0) s += 10;
+  if (context.personality && context.personality.length > 0) s += 10;
+  if (context.preference_style) s += 10;
+  if (context.budget_style) s += 5;
+  if (context.desired_feeling || context.conveyed_emotion || context.notes) s += 5;
+  return Math.min(Math.max(s, 0), 100);
 }
 
 function tryJSONParse(text) {
-    try {
-        return JSON.parse(text);
-    } catch (e) {
+    try { return JSON.parse(text); }
+    catch (e) {
         const start = text.indexOf('{');
         const end = text.lastIndexOf('}');
         if (start !== -1 && end !== -1) {
-            try {
-                return JSON.parse(text.substring(start, end + 1));
-            } catch (e2) {
-                throw new Error("Could not repair JSON response");
-            }
+            try { return JSON.parse(text.substring(start, end + 1)); }
+            catch (e2) { throw new Error("Could not repair JSON response"); }
         }
         throw e;
     }
 }
 
-/**
- * Bulletproof Groq Call with timeouts and fallbacks
- */
 async function safeGroqCall(messages, options = {}) {
-    if (!process.env.GROQ_API_KEY) {
-        throw new Error("GROQ_API_KEY is not configured in environment.");
-    }
-
-    const isDiscovery = options.isDiscovery || false;
-    const models = isDiscovery ? 
-        ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile'] : 
-        ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-    
+    const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
     let lastError = null;
     for (const model of models) {
         try {
-            log(`Attempting AI call with model: ${model}`);
-            
-            // 8 Second safety timeout for Vercel Hobby (max 10s)
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('TIMEOUT')), 8000)
-            );
-
-            const completionPromise = groq.chat.completions.create({
+            const completion = await groq.chat.completions.create({
                 messages,
                 model,
-                temperature: options.temperature || 0.1,
-                max_tokens: isDiscovery ? 1024 : 3000, // Explicit limit to prevent loop errors
+                temperature: options.temperature || 0.0,
                 response_format: { type: "json_object" }
             });
-
-            const completion = await Promise.race([completionPromise, timeoutPromise]);
-            const rawContent = completion.choices[0].message.content;
-            return tryJSONParse(rawContent);
-            
+            return tryJSONParse(completion.choices[0].message.content);
         } catch (err) {
             lastError = err;
-            log(`WARN: Model ${model} failed: ${err.message}`);
-            if (err.message === 'TIMEOUT' || err.status === 429) continue;
-            throw err;
+            continue;
         }
     }
-    throw new Error(`STABILITY_ERROR: ${lastError.message}`);
+    throw new Error(`AI_UNAVAILABLE: ${lastError.message}`);
 }
 
 const SYSTEM_PROMPT = `
-You are WhyGift — an AI Gift Co-Thinker. 
-IMPORTANT: Your response must be in valid JSON format.
+You are WhyGift — an AI Gift Co-Thinker.
+Role: You are a thoughtful AI co-thinker and a warm but intelligent personal assistant. You are emotionally aware, structured, and trust-building.
+Goal: Help users understand the recipient, clarify their emotional intent, map intent to a gift direction, and provide confidence and reasoning.
 
-### INFORMATION NEEDS (CONVERSATIONAL):
-Instead of a rigid sequence, identify these aspects naturally through conversation:
-- Relation (relation)
-- Occasion (occasion)
-- Emotional Intent (emotional_intent)
-- Gift Purpose (gift_purpose)
-- Interests (interests)
-- Personality (personality)
-- Gifting Preference (gifting_preference)
-- Budget (budget)
+SAFETY & BOUNDARY RULES (CRITICAL):
+- NEVER suggest gifts that harm: humans, animals, or environment.
+- NEVER suggest: illegal, dangerous, unethical, or exploitative items or experiences.
 
-### CONVERSATIONAL RULES (STRICT):
-- NO INTERROGATION: Do not ask a list of questions. respond naturally to the user's input first.
-- NO REPETITION: Before asking a question, check 'Current Context'. If a field is already filled, NEVER ask about it again.
-- ONE-AT-A-TIME: Typically ask for only one missing piece of information per message to keep the chat light.
-- FLEXIBILITY: If the user jumps ahead (e.g., mentioning budget and interests at once), extract both and move on.
-- CLARIFICATION: Only ask for clarification if a response is completely irrelevant. Accept brief answers (e.g., "Dad") and proceed.
-- SUMMARIZE: Continuously update 'recipient_summary' and 'intent_summary' as the conversation evolves.
-
-### CORE LOGIC:
-- EXTRACT: Map user input to any matching fields in 'contextUpdate'.
-- IDENTIFY GAPS: Look for which of the important aspects are still missing.
-- STEER: Formulate a natural response that acknowledges the user and gently asks about ONE missing aspect.
-- RECOMMEND: If the user says "show me gifts" or if most aspects are filled, set 'readyForDirections' to true.
+### INSTRUCTIONS FOR AI COMPANION (STRICT):
+1. **ANALYZE**: Listen carefully to the user's latest response.
+2. **UPDATE**: Map user information to the correct JSON field in contextUpdate.
+3. **NEVER REPEAT**: Check the "Current Context" string. If a field is already filled, move to the NEXT one in the list (1-8). Do NOT ask the same question again.
+4. **THOUGHTFUL NEXT STEP**: Respond with 1-2 sentences. 
+   - Flow: 1: Relation | 2: Occasion | 3: Intent/Purpose | 4: Interests | 5: Personality | 6: Style | 7: Budget | 8: Feeling/Notes
 
 JSON FORMAT:
 {
-  "text": "knowledgeable acknowledgment + natural follow-up question",
-  "suggested_options": ["Option 1", "Option 2", "..."],
-  "contextUpdate": { 
-    "relation": "...", 
-    "occasion": "...",
-    "emotional_intent": "...",
-    "gift_purpose": "...",
-    "interests": [],
-    "personality": [],
-    "gifting_preference": "...",
-    "budget": "...",
-    "recipient_summary": "Short summary of who they are",
-    "intent_summary": "Short summary of the gifting goal"
-  },
+  "text": "A brief acknowledgment + next direct question.",
+  "suggested_options": ["Option 1", "Option 2"],
+  "contextUpdate": { "relation": "...", "occasion": "...", "desired_feeling": "...", "gift_intent": "...", "interests": [], "personality": [], "preference_style": "...", "notes": "..." },
   "readyForDirections": false
 }
 `;
 
 const DIRECTIONS_PROMPT = `
-You are the WhyGift Decision Engine. 
-IMPORTANT: Your response must be in valid JSON format.
-Generate 3-5 gift directions based on context.
-FORMAT: { "recipient_summary": "...", "directions": [{ "title": "...", "reasoning": "..." }] }
+You are the WhyGift Decision Engine. Generate personalized gift directions.
+JSON RESPONSE SCHEMA (STRICT):
+{
+  "recipient_summary": "Summary of who they are.",
+  "intent_summary": "Summary of emotional goal.",
+  "confidence_boost": "Affirming sentence.",
+  "confidence_score": 85,
+  "directions": [{ "title": "...", "reasoning": "..." }]
+}
 `;
 
-const handleChat = async (req, res) => {
+app.post('/api/chat', async (req, res) => {
   try {
     let { message, session_id = 'default', contextOverride, isReset, generateDirections } = req.body;
-    
-    if (isReset) {
-      sessions[session_id] = JSON.parse(JSON.stringify(INITIAL_CONTEXT));
-      return res.json({ success: true, context: INITIAL_CONTEXT });
-    }
-
+    if (isReset) { sessions[session_id] = JSON.parse(JSON.stringify(INITIAL_CONTEXT)); return res.json({ success: true }); }
     if (!sessions[session_id]) sessions[session_id] = JSON.parse(JSON.stringify(INITIAL_CONTEXT));
     let context = sessions[session_id];
-    if (contextOverride) {
-        context = deepMerge(context, contextOverride);
-    }
+    if (contextOverride) context = deepMerge(context, contextOverride);
 
-    let llmResText = "Thinking...";
+    let llmResText = "";
     let suggestedOptions = [];
 
     if (message && message.trim()) {
+      log(`[${session_id}] MSG: ${message}`);
       const llmRes = await safeGroqCall([
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'system', content: `Current Context: ${JSON.stringify(context)}` },
           { role: 'user', content: message }
-      ], { temperature: 0.1, isDiscovery: true });
-
+      ]);
       llmResText = llmRes.text;
       suggestedOptions = llmRes.suggested_options || [];
       if (llmRes.contextUpdate) context = deepMerge(context, llmRes.contextUpdate);
@@ -219,37 +167,37 @@ const handleChat = async (req, res) => {
     }
     
     let readiness = calculateConfidence(context);
-    context.confidence = readiness;
+    if (!context.ai_confidence) context.confidence = readiness;
 
-    if (generateDirections || (readiness >= 75 && context.directions.length === 0)) {
+    if (generateDirections || readiness >= 75) {
+        if (generateDirections) context.stage = 'hint';
         try {
             const rJS = await safeGroqCall([
                 { role: 'system', content: DIRECTIONS_PROMPT },
                 { role: 'system', content: `Context: ${JSON.stringify(context)}` }
-            ], { temperature: 0.2 });
+            ], { temperature: 0.1 });
             if (rJS.directions) context.directions = rJS.directions;
             if (rJS.recipient_summary) context.recipient_summary = rJS.recipient_summary;
+            if (rJS.intent_summary) context.intent_summary = rJS.intent_summary;
+            if (rJS.confidence_boost) context.confidence_boost = rJS.confidence_boost;
+            if (rJS.confidence_score !== undefined) context.confidence = rJS.confidence_score;
         } catch (e) { log(`Reasoning failed: ${e.message}`); }
     }
 
     sessions[session_id] = context;
     res.json({ response: llmResText, context, suggested_options: suggestedOptions });
-
   } catch (err) {
     log(`ERROR: ${err.message}`);
-    const errMsg = err.message.includes('apiKey') ? 'Configuration Error: API Key missing in Vercel.' : 'Assistant is busy. Please try again.';
-    res.status(500).json({ error: errMsg });
+    res.status(500).json({ error: 'Internal Server Error' });
   }
-};
-
-// Map both for absolute compatibility
-app.post('/api/chat', handleChat);
-app.post('/chat', handleChat);
-
-app.get('/api/log', (req, res) => res.send('Check Vercel Dashboard for live logs.'));
-app.get('/log', (req, res) => res.send('Check Vercel Dashboard for live logs.'));
+});
 
 app.post('/api/feedback', (req, res) => res.json({ success: true }));
 app.post('/api/analytics/log', (req, res) => res.json({ success: true }));
+
+const PORT = process.env.PORT || 5000;
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => log(`Server running on ${PORT}`));
+}
 
 module.exports = app;

@@ -25,18 +25,25 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [context, setContext] = useState({
+    stage: 'entry',
     relation: '',
     occasion: '',
-    emotional_intent: '',
-    gift_purpose: '',
+    desired_feeling: '',
+    conveyed_emotion: '',
+    gift_intent: '',
     interests: [],
     personality: [],
-    gifting_preference: '',
-    budget: '',
+    gifting_frequency: '',
+    budget_style: '',
+    preference_style: '',
+    uncertainty: '',
+    notes: '',
     recipient_summary: '',
     intent_summary: '',
     directions: [],
-    confidence: 0
+    confidence: 0,
+    confidence_boost: '',
+    ai_confidence: null
   });
   
   const [feedbackSent, setFeedbackSent] = useState(false);
