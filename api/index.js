@@ -25,25 +25,18 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const sessions = {};
 
 const INITIAL_CONTEXT = {
-  stage: 'entry',
   relation: '',
   occasion: '',
-  desired_feeling: '',
-  conveyed_emotion: '',
-  gift_intent: '',
+  emotional_intent: '',
+  gift_purpose: '',
   interests: [],
   personality: [],
-  gifting_frequency: '',
-  budget_style: '',
-  preference_style: '',
-  uncertainty: '',
-  notes: '',
+  gifting_preference: '',
+  budget: '',
   recipient_summary: '',
   intent_summary: '',
   directions: [],
-  confidence: 0,
-  confidence_boost: '',
-  ai_confidence: null
+  confidence: 0
 };
 
 function deepMerge(target, source) {
@@ -67,13 +60,13 @@ function calculateConfidence(context) {
   let s = 0;
   if (context.relation) s += 15;
   if (context.occasion) s += 15;
-  if (context.desired_feeling) s += 15;
-  if (context.gift_intent) s += 15;
-  if (context.budget_style) s += 10;
-  if (context.interests && context.interests.length > 0) s += 10;
-  if (context.personality && context.personality.length > 0) s += 10;
-  if (context.preference_style) s += 10;
-  return Math.min(Math.max(s, 0), 100);
+  if (context.emotional_intent) s += 15;
+  if (context.gift_purpose) s += 15;
+  if (context.interests?.length > 0) s += 10;
+  if (context.personality?.length > 0) s += 10;
+  if (context.gifting_preference) s += 10;
+  if (context.budget) s += 10;
+  return Math.min(s, 100);
 }
 
 function tryJSONParse(text) {
@@ -143,36 +136,42 @@ You are WhyGift — an AI Gift Co-Thinker.
 IMPORTANT: Your response must be in valid JSON format.
 
 ### DISCOVERY SEQUENCE (STRICT):
-1. Relationship with Recipient (relation)
-2. Occasion / Context (occasion)
-3. Primary Emotional Intent (emotional_intent)
-4. Underlying Gift Purpose (gift_purpose)
+1. Relationship (relation)
+2. Occasion (occasion)
+3. Emotional Intent (emotional_intent)
+4. Gift Purpose (gift_purpose)
 5. Recipient Interests (interests)
-6. Recipient Personality Traits (personality)
+6. Recipient Personality (personality)
 7. Gifting Preference (gifting_preference)
 8. Budget (budget)
 
-### CORE LOGIC:
-- READ: Scan 'Current Context'. If a step is filled, DO NOT ASK about it again.
-- EXTRACT: Fill ALL matching fields from user message into 'contextUpdate'.
-- ASK: Identify the first MISSING step in the 1-8 sequence and ask it.
-- CLARIFY: If user input is unclear or inappropriate for the current step, ask once more for clarification before moving on.
-- OVERRULE: If user asks for "gifts now", "recommendations", or "skip", set 'readyForDirections' to true.
-- COMPLETION: When 'budget' (Step 8) is filled, set 'readyForDirections' to true.
+### REPETITION CONTROL (CRITICAL):
+- BEFORE ASKING: Check the 'Current Context' JSON.
+- IF A FIELD HAS A VALUE: It is considered "Answered". Do NOT ask about it again.
+- IF USER PROVIDES MULTIPLE ANSWERS: Extract ALL of them into 'contextUpdate' and skip those steps.
+- CLARIFICATION RULE: Only ask for clarification if the user's response is completely irrelevant (e.g., gibberish). If they provide a valid but brief answer (e.g., "Friend"), ACCEPT IT and move to the next step immediately.
 
-### OUTPUT RULES:
-- Provide 4-6 contextual chips (options) for every question.
-- Be concise (max 2 sentences).
+### CORE LOGIC:
+- EXTRACT: Map user input to its corresponding 8-step field in 'contextUpdate'.
+- ASK: Find the very first field in the 1-8 sequence that is EMPTY and ask ONLY that question.
+- SUMMARIZE: Always update 'recipient_summary' and 'intent_summary' with the latest details.
+- OVERRULE: If user says "skip", "recommend gifts", or "show ideas", set 'readyForDirections' to true.
 
 JSON FORMAT:
 {
-  "text": "acknowledgment + next missing question",
+  "text": "acknowledgment + the single next missing question",
   "suggested_options": ["Option 1", "Option 2", "..."],
   "contextUpdate": { 
     "relation": "...", 
     "occasion": "...",
-    "recipient_summary": "Short summary of who they are (e.g. 'Your best friend')",
-    "intent_summary": "Short summary of the goal (e.g. 'A thoughtful birthday surprise')"
+    "emotional_intent": "...",
+    "gift_purpose": "...",
+    "interests": [],
+    "personality": [],
+    "gifting_preference": "...",
+    "budget": "...",
+    "recipient_summary": "Short summary of who they are",
+    "intent_summary": "Short summary of the gifting goal"
   },
   "readyForDirections": false
 }
