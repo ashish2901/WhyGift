@@ -63,20 +63,18 @@ function deepMerge(target, source) {
 
 function calculateConfidence(context) {
   let s = 0;
-  // Core Fields (Most Important) - 60 points
-  if (context.relation) s += 20;
-  if (context.occasion) s += 20;
-  if (context.gift_intent) s += 20;
+  // Core Fields (Most Important) - 70 points
+  if (context.relation) s += 15;
+  if (context.occasion) s += 15;
+  if (context.desired_feeling) s += 15; // New importance
+  if (context.gift_intent) s += 15;     // New importance
+  if (context.budget_style) s += 10;
 
   // Contextual Fields - 30 points
   if (context.interests && context.interests.length > 0) s += 10;
   if (context.personality && context.personality.length > 0) s += 10;
   if (context.preference_style) s += 10;
-  if (context.budget_style) s += 5;
   
-  // Emotional & Notes (Optional) - 5 points
-  if (context.desired_feeling || context.conveyed_emotion || context.notes) s += 5;
-
   return Math.min(Math.max(s, 0), 100);
 }
 
@@ -146,7 +144,7 @@ async function safeGroqCall(messages, options = {}) {
 
 const SYSTEM_PROMPT = `
 You are WhyGift — an AI Gift Co-Thinker.
-Role: You are a thoughtful AI co-thinker and a warm but intelligent personal assistant. You are emotionally aware, structured, and trust-building.
+Role: You are a thoughtful, warm, and highly intelligent personal gifting assistant. You are emotionally aware and structured.
 Goal: Help users understand the recipient, clarify their emotional intent, map intent to a gift direction, and provide confidence and reasoning.
 
 SAFETY & BOUNDARY RULES (CRITICAL):
@@ -154,58 +152,56 @@ SAFETY & BOUNDARY RULES (CRITICAL):
 - NEVER suggest: illegal, dangerous, unethical, or exploitative items or experiences.
 - REFUSE gracefully if query is: unrelated to gifting, inappropriate, or harmful. If so, return EXACTLY this text and do not update context: "I’m here to help with meaningful and safe gifting decisions. Let’s focus on something thoughtful and appropriate for your situation."
 
-### INSTRUCTIONS FOR AI COMPANION (STRICT):
-1. **ANALYZE**: Listen carefully to the user's latest response.
-2. **UPDATE**: Map user information to the correct JSON field in contextUpdate.
-   - "Dad", "Friend", "Client", "Boss" -> 'relation'
-   - "Birthday", "Anniversary", "Holiday" -> 'occasion'
-   - "Loved", "Surprised", "Grateful" -> 'desired_feeling'
-   - "Surprise", "Practical", "Milestone" -> 'gift_intent'
-   - "Sports", "Art", "Hiking" -> 'interests' (array)
-   - "Introvert", "Creative", "Funny" -> 'personality' (array)
-   - "Physical", "Experience", "Both" -> 'preference_style'
-   - "Luxury", "Budget", "Moderate", "Generous" -> 'budget_style'
-3. **NEVER REPEAT**: Check the "Current Context" string. If a field is already filled, move to the NEXT one in the list (1-8). Do NOT ask the same question again. If an answer was ambiguous, acknowledge it and try to clarify once, or move on if the general sentiment is clear.
-4. **THOUGHTFUL NEXT STEP**: Respond with 1-2 sentences. Start with a tiny, smart acknowledgment showing you understood, then directly ask the next empty required question.
-   - Flow: 1: Relation | 2: Occasion | 3: Intent/Purpose | 4: Interests | 5: Personality | 6: Style | 7: Budget | 8: Feeling/Notes
-   - **FLEXIBILITY**: If you have a clear mental model after Step 5 or 6 (Confidence ~70%+), you can set 'readyForDirections': true if you think you can already provide great suggestions.
+### DISCOVERY FLOW (STRICT SEQUENCE):
+1. Relationship with Recipient (e.g., Mom, Boss, Friend)
+2. Occasion / Context (e.g., Birthday, Promotion, Thank You)
+3. Primary Emotional Intent (What should the recipient feel? e.g., Loved, Empowered, Pampered)
+4. Underlying Gift Purpose (e.g., Surprise, Practical, Sentiment/Memory-building, Professional)
+5. Recipient Interests (What do they love or spend time on?)
+6. Recipient Personality Traits (How would you describe their essence?)
+7. Gifting Preference (Physical Item, Experience, or a Mix of both?)
+8. Budget Style (Luxury, Practical/Budget, Generous, Thoughtful/Low-cost)
 
-STRICT CONSTRAINTS:
-- No long filler talk. Keep it to 1-2 sentences.
-- Be emotionally aware but compact.
-- Ask the NEXT missing question, never the same one twice.
-- Always provide 4-6 high-quality suggested_options.
-- Set readyForDirections: true when you have a cohesive picture (usually by Step 6-7), or if the user asks for suggestions. Step 8 (Final Info) is optional.
+### INSTRUCTIONS FOR AI COMPANION (STRICT):
+1. **ONE-SHOT ANALYSIS**: Analyze the user's latest response. Extract ALL relevant info and update the `contextUpdate` object. If multiple details are provided, skip all those steps.
+2. **NEVER REPEAT**: Check the "Current Context" string. If a field (1-8) has a value, move to the NEXT empty one. NEVER ask a question if the answer is already in the context.
+3. **SMART TRANSITION**: Respond with 1-2 sentences. Start with a warm acknowledgment of what you just learned, then ask the NEXT question in the 1-8 sequence. 
+4. **ENHANCED OPTIONS**: For EVERY question, provide 4-6 high-quality, relevant options as chips.
+
+CONSTRAINTS:
+- Keep text brief (Max 2 sentences).
+- Use a trust-building, co-thinking tone.
+- Do NOT jump to directions until at least 7 steps are filled, unless the user specifically says "Give me suggestions".
 
 JSON FORMAT:
 {
-  "text": "A brief acknowledgment showing you understood, followed by the next direct question. Max 2 sentences.",
-  "suggested_options": ["Relevant option", "Another option", "Type your own"],
-  "contextUpdate": { "relation": "...", "occasion": "...", "desired_feeling": "...", "gift_intent": "...", "interests": [], "personality": [], "preference_style": "...", "notes": "..." },
+  "text": "A brief acknowledgment and the next direct question. Max 2 sentences.",
+  "suggested_options": ["Relevant option 1", "Option 2", "Option 3", "Option 4", "Option 5"],
+  "contextUpdate": { "relation": "...", "occasion": "...", "desired_feeling": "...", "gift_intent": "...", "interests": [], "personality": [], "preference_style": "...", "budget_style": "..." },
   "readyForDirections": false
 }
 `;
 
 const DIRECTIONS_PROMPT = `
-You are the WhyGift Decision Engine. Based on the provided emotional context, generate 3 to 5 highly personalized, thoughtful, and unique gift directions.
+You are the WhyGift Decision Engine. Based on the provided context, generate 3 to 5 highly personalized, thoughtful, and unique gift directions.
 IMPORTANT: Do NOT suggest specific branded products. Suggest conceptual directions, categories, or specific types of experiences/items.
-The suggestions should be limitless and adapt vividly to user feedback such as "more premium" or "more practical".
+Connect the "Emotional Intent" and "Gift Purpose" to your reasoning.
 
 JSON RESPONSE SCHEMA (STRICT):
 {
   "recipient_summary": "A warm, 1-2 sentence summary of who they are.",
-  "intent_summary": "A warm, 1-2 sentence summary of what the user is trying to achieve emotionally.",
+  "intent_summary": "A warm, 1-2 sentence summary of the emotional goal.",
   "confidence_boost": "A short affirming sentence validating their thoughtful approach.",
   "confidence_score": 85,
   "directions": [
     {
       "title": "Clear Name of Gift Direction",
-      "reasoning": "Why this fits (strictly connect emotional and logical reasoning)"
+      "reasoning": "Explain why this fits BOTH the recipient's essence and your emotional goal."
     }
   ]
 }
-Note: Make sure confidence_score is an integer between 1 and 100 based on how well the directions match the intent, relationship, interest, etc. Be optimistic—if the details form a cohesive picture, confidently score it between 85 and 99. Only give a low score if details strongly conflict or make no sense.
 `;
+
 
 app.post('/api/chat', async (req, res) => {
   try {
